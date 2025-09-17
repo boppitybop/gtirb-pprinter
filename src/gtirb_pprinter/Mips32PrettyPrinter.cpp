@@ -243,6 +243,9 @@ void Mips32PrettyPrinter::printSymExprPrefix(
     } else if (Attrs.count(gtirb::SymAttribute::OFST)) {
       UnusedAttrs.erase(gtirb::SymAttribute::OFST);
       OS << "%got_ofst(";
+    } else if (Attrs.count(gtirb::SymAttribute::TPREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::TPREL);
+      OS << "%gottprel(";
     } else {
       OS << "%got(";
     }
@@ -252,6 +255,12 @@ void Mips32PrettyPrinter::printSymExprPrefix(
   } else if (Attrs.count(gtirb::SymAttribute::HI)) {
     UnusedAttrs.erase(gtirb::SymAttribute::HI);
     OS << "%hi(";
+  } else if (Attrs.count(gtirb::SymAttribute::TLSGD)) {
+    UnusedAttrs.erase(gtirb::SymAttribute::TLSGD);
+    OS << "%tlsgd(";
+  } else if (Attrs.count(gtirb::SymAttribute::TLSLDM)) {
+    UnusedAttrs.erase(gtirb::SymAttribute::TLSLDM);
+    OS << "%tlsldm(";
   }
 
   if (UnusedAttrs.size() > 0) {
@@ -276,6 +285,8 @@ void Mips32PrettyPrinter::printSymExprSuffix(
     switch (Attr) {
     case gtirb::SymAttribute::LO:
     case gtirb::SymAttribute::HI:
+    case gtirb::SymAttribute::TLSGD:
+    case gtirb::SymAttribute::TLSLDM:
     case gtirb::SymAttribute::GOT: {
       OS << ")";
     } break;

@@ -1,5 +1,7 @@
 # 2.2.3 (Unreleased)
 
+  * Fix a bug that could cause missing MIPS TLS relocation directives, such as `%tlsgd` or `%tlsldm`.
+
 # 2.2.2
 
   * Fix a bug that could cause `vector_index` not printed for ARM vector instructions.
