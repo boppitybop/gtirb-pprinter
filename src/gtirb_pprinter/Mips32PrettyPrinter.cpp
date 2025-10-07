@@ -15,6 +15,7 @@
 
 #include "Mips32PrettyPrinter.hpp"
 #include "AuxDataSchema.hpp"
+#include "StringUtils.hpp"
 #include "driver/Logger.h"
 
 #include <capstone/capstone.h>
@@ -40,6 +41,7 @@ Mips32PrettyPrinterFactory::Mips32PrettyPrinterFactory() {
   auto& DynamicPolicy = *findRegisteredNamedPolicy("dynamic");
   DynamicPolicy.skipFunctions.erase("call_weak_fn");
   DynamicPolicy.skipSymbols.erase("_fp_hw");
+  DynamicPolicy.skipSymbols.erase("_IO_stdin_used");
   DynamicPolicy.skipSections.erase(".rela.dyn");
   DynamicPolicy.skipSections.erase(".rela.plt");
 
@@ -194,6 +196,36 @@ void Mips32PrettyPrinter::printOperand(std::ostream& os,
   }
 }
 
+void Mips32PrettyPrinter::fixupInstruction(cs_insn& inst) {
+  ElfPrettyPrinter::fixupInstruction(inst);
+
+  switch (inst.id) {
+  case MIPS_INS_DIV:
+  case MIPS_INS_DIVU: {
+    // Capstone disassembles DIV and DIVU with only two operands, omitting
+    // the implicit $zero.
+    // (Both cstool and objdump display three operands)
+    //
+    // Here we fix Capstone's output by inserting the implicit first operand
+    // $zero for DIV and DIVU.
+    cs_mips& Detail = inst.detail->mips;
+    std::string Name = ascii_str_toupper(inst.mnemonic);
+    if (Detail.op_count == 2 && (Name == "DIV" || Name == "DIVU")) {
+      cs_mips_op Op0;
+      Op0.type = MIPS_OP_REG;
+      Op0.reg = MIPS_REG_ZERO;
+
+      Detail.operands[2] = Detail.operands[1];
+      Detail.operands[1] = Detail.operands[0];
+      Detail.operands[0] = Op0;
+
+      Detail.op_count = 3;
+      break;
+    }
+  }
+  }
+}
+
 void Mips32PrettyPrinter::printInstruction(std::ostream& os,
                                            const gtirb::CodeBlock& block,
                                            const cs_insn& inst,
@@ -249,6 +281,24 @@ void Mips32PrettyPrinter::printSymExprPrefix(
     } else {
       OS << "%got(";
     }
+  } else if (Attrs.count(gtirb::SymAttribute::TPREL)) {
+    UnusedAttrs.erase(gtirb::SymAttribute::TPREL);
+    if (Attrs.count(gtirb::SymAttribute::LO)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::LO);
+      OS << "%tprel_lo(";
+    } else if (Attrs.count(gtirb::SymAttribute::HI)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::HI);
+      OS << "%tprel_hi(";
+    }
+  } else if (Attrs.count(gtirb::SymAttribute::PCREL)) {
+    UnusedAttrs.erase(gtirb::SymAttribute::PCREL);
+    if (Attrs.count(gtirb::SymAttribute::LO)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::LO);
+      OS << "%pcrel_lo(";
+    } else if (Attrs.count(gtirb::SymAttribute::HI)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::HI);
+      OS << "%pcrel_hi(";
+    }
   } else if (Attrs.count(gtirb::SymAttribute::LO)) {
     UnusedAttrs.erase(gtirb::SymAttribute::LO);
     OS << "%lo(";
@@ -281,18 +331,23 @@ void Mips32PrettyPrinter::printSymExprPrefix(
 void Mips32PrettyPrinter::printSymExprSuffix(
     std::ostream& OS, const gtirb::SymAttributeSet& Attrs,
     bool /*IsNotBranch*/) {
+  bool CloseParen = false;
   for (const auto& Attr : Attrs) {
     switch (Attr) {
     case gtirb::SymAttribute::LO:
     case gtirb::SymAttribute::HI:
     case gtirb::SymAttribute::TLSGD:
     case gtirb::SymAttribute::TLSLDM:
+    case gtirb::SymAttribute::TPREL:
     case gtirb::SymAttribute::GOT: {
-      OS << ")";
+      CloseParen = true;
     } break;
     default:
       break;
     }
+  }
+  if (CloseParen) {
+    OS << ")";
   }
 }
 
@@ -314,12 +369,44 @@ void Mips32PrettyPrinter::printSymbolicExpression(
     return;
   }
 
+  os << "(";
   ElfPrettyPrinter::printSymbolicExpression(os, sexpr, IsNotBranch);
+  os << ")";
 }
 
 void Mips32PrettyPrinter::printSymbolicExpression(
     std::ostream& os, const gtirb::SymAddrConst* sexpr, bool IsNotBranch) {
   ElfPrettyPrinter::printSymbolicExpression(os, sexpr, IsNotBranch);
+}
+
+bool Mips32PrettyPrinter::printSymbolReference(std::ostream& OS,
+                                               const gtirb::Symbol* Symbol) {
+  if (auto* Result = getForwardedSymbol(Symbol)) {
+    std::string forwardedName = getSymbolName(*Result);
+
+    // Check If the forwarded symbol should be skipped.
+    if (shouldSkip(policy, *Result)) {
+      if (LstMode == ListingDebug || LstMode == ListingUI) {
+        OS << forwardedName;
+        return false;
+      } else {
+        // NOTE: It is OK not to print symbols in unexercised code (functions
+        // that never execute, but were not skipped due to lack of information
+        // : e.g., sectionless binaries). However, printing symbol addresses
+        // can cause the assembler to fail if the address is too big for the
+        // instruction. To avoid the problem, we print 0 here.
+        OS << "0";
+        uint64_t symAddr = static_cast<uint64_t>(*Symbol->getAddress());
+        m_accum_comment += s_symaddr_0_warning(symAddr);
+        return true;
+      }
+    }
+
+    OS << forwardedName;
+    return false;
+  }
+
+  return PrettyPrinterBase::printSymbolReference(OS, Symbol);
 }
 
 } // namespace gtirb_pprint

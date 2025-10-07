@@ -34,6 +34,7 @@ public:
                       const ElfSyntax& syntax, const PrintingPolicy& policy);
 
 protected:
+  void fixupInstruction(cs_insn& inst) override;
   void printHeader(std::ostream& os) override;
   void printOpRegdirect(std::ostream& os, const cs_insn& inst,
                         uint64_t index) override;
@@ -63,6 +64,8 @@ protected:
   void printSymbolicExpression(std::ostream& os,
                                const gtirb::SymAddrAddr* sexpr,
                                bool IsNotBranch = false) override;
+  bool printSymbolReference(std::ostream& os,
+                            const gtirb::Symbol* symbol) override;
 };
 
 class DEBLOAT_PRETTYPRINTER_EXPORT_API Mips32PrettyPrinterFactory

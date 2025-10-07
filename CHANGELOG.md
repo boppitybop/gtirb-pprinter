@@ -1,6 +1,9 @@
 # 2.2.3 (Unreleased)
 
-  * Fix a bug that could cause missing MIPS TLS relocation directives, such as `%tlsgd` or `%tlsldm`.
+  * Fix a bug that could cause certain MIPS TLS relocation directives (e.g.,
+    %tlsgd, %tlsldm, %tprel_hi, %tprel_lo, %pcrel_hi `%pcrel_lo`) to be omitted.
+  * Fix an issue where the first $zero operand was missing in MIPS DIV and DIVU
+    instructions.
 
 # 2.2.2
 
