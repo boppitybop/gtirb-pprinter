@@ -54,7 +54,7 @@ Mips32PrettyPrinterFactory::Mips32PrettyPrinterFactory() {
        // Include symbols in sections to avoid printing for sectionless binaries
        "_Jv_RegisterClasses"});
   DynamicPolicy.skipSections.insert(
-      {".MIPS.stubs", ".ctors", ".dtors", ".interp", ".rld_map", ".sdata"});
+      {".MIPS.stubs", ".ctors", ".dtors", ".interp", ".rld_map"});
 
   deregisterNamedPolicy("static");
   deregisterNamedPolicy("complete");
