@@ -512,12 +512,15 @@ protected:
 
   bool shouldSkip(const PrintingPolicy& Policy,
                   const gtirb::Section& section) const;
-  bool shouldSkip(const PrintingPolicy& Policy,
-                  const gtirb::Symbol& symbol) const;
+  bool shouldSkip(const PrintingPolicy& Policy, const gtirb::Symbol& symbol,
+                  bool CheckSymNameOnly = false) const;
   bool shouldSkip(const PrintingPolicy& Policy,
                   const gtirb::CodeBlock& block) const;
   bool shouldSkip(const PrintingPolicy& Policy,
                   const gtirb::DataBlock& block) const;
+
+  virtual bool shouldSkipForwardedSymbol(const PrintingPolicy& Policy,
+                                         const gtirb::Symbol& symbol);
 
 private:
   gtirb::Addr programCounter;

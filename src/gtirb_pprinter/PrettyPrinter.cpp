@@ -599,33 +599,45 @@ std::string PrettyPrinterBase::getFunctionName(gtirb::Addr Addr) const {
   return std::string{};
 }
 
+bool PrettyPrinterBase::shouldSkipForwardedSymbol(
+    const PrintingPolicy& Policy, const gtirb::Symbol& ForwardedSymbol) {
+  // By default, only the forwarded symbol name is checked against
+  // skip.Symbols, without further verifying the corresponding function
+  // or section.
+  // For example, a forwarded symbol in the PLT section should not be skipped.
+  bool CheckSymNameOnly = true;
+  return shouldSkip(Policy, ForwardedSymbol, CheckSymNameOnly);
+}
+
 bool PrettyPrinterBase::printSymbolReference(std::ostream& os,
                                              const gtirb::Symbol* symbol) {
   if (!symbol)
     return false;
 
-  std::optional<std::string> forwardedName = getForwardedSymbolName(symbol);
-  if (forwardedName) {
-    if (LstMode == ListingDebug || LstMode == ListingUI) {
-      os << forwardedName.value();
+  gtirb::Symbol* forwardedSymbol = getForwardedSymbol(symbol);
+  if (forwardedSymbol) {
+    std::string forwardedName = getSymbolName(*forwardedSymbol);
+    if (LstMode == ListingUI) {
+      os << forwardedName;
       return false;
+    }
+
+    if (shouldSkipForwardedSymbol(policy, *forwardedSymbol)) {
+      // NOTE: It is OK not to print symbols in unexercised code (functions
+      // that never execute, but were not skipped due to lack of information
+      // : e.g., sectionless binaries). However, printing symbol addresses
+      // can cause the assembler to fail if the address is too big for the
+      // instruction. To avoid the problem, we print 0 here.
+      os << "0";
+      uint64_t symAddr = static_cast<uint64_t>(*forwardedSymbol->getAddress());
+      m_accum_comment += s_symaddr_0_warning(symAddr);
+      return true;
     } else {
-      if (policy.skipSymbols.count(forwardedName.value())) {
-        // NOTE: It is OK not to print symbols in unexercised code (functions
-        // that never execute, but were not skipped due to lack of information
-        // : e.g., sectionless binaries). However, printing symbol addresses
-        // can cause the assembler to fail if the address is too big for the
-        // instruction. To avoid the problem, we print 0 here.
-        os << "0";
-        uint64_t symAddr = static_cast<uint64_t>(*symbol->getAddress());
-        m_accum_comment += s_symaddr_0_warning(symAddr);
-        return true;
-      } else {
-        os << forwardedName.value();
-        return false;
-      }
+      os << forwardedName;
+      return false;
     }
   }
+
   if (shouldSkip(policy, *symbol)) {
     if (LstMode == ListingDebug || LstMode == ListingUI) {
       os << static_cast<uint64_t>(*symbol->getAddress());
@@ -1404,13 +1416,18 @@ bool PrettyPrinterBase::shouldSkip(const PrintingPolicy& Policy,
 }
 
 bool PrettyPrinterBase::shouldSkip(const PrintingPolicy& Policy,
-                                   const gtirb::Symbol& Symbol) const {
+                                   const gtirb::Symbol& Symbol,
+                                   bool CheckSymNameOnly) const {
   if (Policy.LstMode == ListingDebug) {
     return false;
   }
 
-  if (Policy.skipSymbols.count(Symbol.getName())) {
+  if (Policy.skipSymbols.count(getSymbolName(Symbol))) {
     return true;
+  }
+
+  if (CheckSymNameOnly) {
+    return false;
   }
 
   if (Symbol.hasReferent()) {

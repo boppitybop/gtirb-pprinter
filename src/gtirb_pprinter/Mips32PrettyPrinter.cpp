@@ -209,6 +209,10 @@ void Mips32PrettyPrinter::fixupInstruction(cs_insn& inst) {
     // Here we fix Capstone's output by inserting the implicit first operand
     // $zero for DIV and DIVU.
     cs_mips& Detail = inst.detail->mips;
+    // NOTE: In the version of capstone we use (v5), div.s shares the same ID,
+    // An additional check is added here to handle this case correctly.
+    // TODO: This issue is fixed in Capstone v6.
+    // Remove this workaround once our Capstone fork is updated.
     std::string Name = ascii_str_toupper(inst.mnemonic);
     if (Detail.op_count == 2 && (Name == "DIV" || Name == "DIVU")) {
       cs_mips_op Op0;
@@ -281,30 +285,45 @@ void Mips32PrettyPrinter::printSymExprPrefix(
     } else {
       OS << "%got(";
     }
+  } else if (Attrs.count(gtirb::SymAttribute::DTPREL)) {
+    UnusedAttrs.erase(gtirb::SymAttribute::DTPREL);
+    if (Attrs.count(gtirb::SymAttribute::HI)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::HI);
+      OS << "%dtprel_hi(";
+    } else if (Attrs.count(gtirb::SymAttribute::LO)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::LO);
+      OS << "%dtprel_lo(";
+    } else {
+      assert(!"DTPREL with HI/LO");
+    }
   } else if (Attrs.count(gtirb::SymAttribute::TPREL)) {
     UnusedAttrs.erase(gtirb::SymAttribute::TPREL);
-    if (Attrs.count(gtirb::SymAttribute::LO)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::LO);
-      OS << "%tprel_lo(";
-    } else if (Attrs.count(gtirb::SymAttribute::HI)) {
+    if (Attrs.count(gtirb::SymAttribute::HI)) {
       UnusedAttrs.erase(gtirb::SymAttribute::HI);
       OS << "%tprel_hi(";
+    } else if (Attrs.count(gtirb::SymAttribute::LO)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::LO);
+      OS << "%tprel_lo(";
+    } else {
+      assert(!"TPREL with HI/LO");
     }
   } else if (Attrs.count(gtirb::SymAttribute::PCREL)) {
     UnusedAttrs.erase(gtirb::SymAttribute::PCREL);
-    if (Attrs.count(gtirb::SymAttribute::LO)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::LO);
-      OS << "%pcrel_lo(";
-    } else if (Attrs.count(gtirb::SymAttribute::HI)) {
+    if (Attrs.count(gtirb::SymAttribute::HI)) {
       UnusedAttrs.erase(gtirb::SymAttribute::HI);
       OS << "%pcrel_hi(";
+    } else if (Attrs.count(gtirb::SymAttribute::LO)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::LO);
+      OS << "%pcrel_lo(";
+    } else {
+      assert(!"PCREL with HI/LO");
     }
-  } else if (Attrs.count(gtirb::SymAttribute::LO)) {
-    UnusedAttrs.erase(gtirb::SymAttribute::LO);
-    OS << "%lo(";
   } else if (Attrs.count(gtirb::SymAttribute::HI)) {
     UnusedAttrs.erase(gtirb::SymAttribute::HI);
     OS << "%hi(";
+  } else if (Attrs.count(gtirb::SymAttribute::LO)) {
+    UnusedAttrs.erase(gtirb::SymAttribute::LO);
+    OS << "%lo(";
   } else if (Attrs.count(gtirb::SymAttribute::TLSGD)) {
     UnusedAttrs.erase(gtirb::SymAttribute::TLSGD);
     OS << "%tlsgd(";
@@ -334,12 +353,14 @@ void Mips32PrettyPrinter::printSymExprSuffix(
   bool CloseParen = false;
   for (const auto& Attr : Attrs) {
     switch (Attr) {
-    case gtirb::SymAttribute::LO:
-    case gtirb::SymAttribute::HI:
-    case gtirb::SymAttribute::TLSGD:
-    case gtirb::SymAttribute::TLSLDM:
+    case gtirb::SymAttribute::GOT:
+    case gtirb::SymAttribute::DTPREL:
     case gtirb::SymAttribute::TPREL:
-    case gtirb::SymAttribute::GOT: {
+    case gtirb::SymAttribute::PCREL:
+    case gtirb::SymAttribute::HI:
+    case gtirb::SymAttribute::LO:
+    case gtirb::SymAttribute::TLSGD:
+    case gtirb::SymAttribute::TLSLDM: {
       CloseParen = true;
     } break;
     default:
@@ -379,34 +400,16 @@ void Mips32PrettyPrinter::printSymbolicExpression(
   ElfPrettyPrinter::printSymbolicExpression(os, sexpr, IsNotBranch);
 }
 
-bool Mips32PrettyPrinter::printSymbolReference(std::ostream& OS,
-                                               const gtirb::Symbol* Symbol) {
-  if (auto* Result = getForwardedSymbol(Symbol)) {
-    std::string forwardedName = getSymbolName(*Result);
-
-    // Check If the forwarded symbol should be skipped.
-    if (shouldSkip(policy, *Result)) {
-      if (LstMode == ListingDebug || LstMode == ListingUI) {
-        OS << forwardedName;
-        return false;
-      } else {
-        // NOTE: It is OK not to print symbols in unexercised code (functions
-        // that never execute, but were not skipped due to lack of information
-        // : e.g., sectionless binaries). However, printing symbol addresses
-        // can cause the assembler to fail if the address is too big for the
-        // instruction. To avoid the problem, we print 0 here.
-        OS << "0";
-        uint64_t symAddr = static_cast<uint64_t>(*Symbol->getAddress());
-        m_accum_comment += s_symaddr_0_warning(symAddr);
-        return true;
-      }
-    }
-
-    OS << forwardedName;
-    return false;
-  }
-
-  return PrettyPrinterBase::printSymbolReference(OS, Symbol);
+bool Mips32PrettyPrinter::shouldSkipForwardedSymbol(
+    const PrintingPolicy& Policy, const gtirb::Symbol& Symbol) {
+  // In stripped or sstripped MIPS binaries, function and secction names are
+  // removed, which can cause certain functions or sectdions that should be
+  // skipped according to policy--such as _init or _start--to remain, leading
+  // to dangling references.
+  // To address this, in addition to checking the symbol name, also verify
+  // the corresponding funcion and section to determine whether it should be
+  // skipped.
+  return shouldSkip(Policy, Symbol, false /*CheckSymNameOnly*/);
 }
 
 } // namespace gtirb_pprint
