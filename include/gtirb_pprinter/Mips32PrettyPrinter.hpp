@@ -65,7 +65,7 @@ protected:
                                const gtirb::SymAddrAddr* sexpr,
                                bool IsNotBranch = false) override;
   bool shouldSkipForwardedSymbol(const PrintingPolicy& Policy,
-                                 const gtirb::Symbol& symbol);
+                                 const gtirb::Symbol& symbol) override;
 };
 
 class DEBLOAT_PRETTYPRINTER_EXPORT_API Mips32PrettyPrinterFactory
