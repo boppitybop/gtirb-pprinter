@@ -606,7 +606,7 @@ bool PrettyPrinterBase::shouldSkipForwardedSymbol(
   // or section.
   // For example, a forwarded symbol in the PLT section should not be skipped.
   bool CheckSymNameOnly = true;
-  return shouldSkip(Policy, ForwardedSymbol, CheckSymNameOnly);
+  return shouldSkipSymbol(Policy, ForwardedSymbol, CheckSymNameOnly);
 }
 
 bool PrettyPrinterBase::printSymbolReference(std::ostream& os,
@@ -1416,8 +1416,13 @@ bool PrettyPrinterBase::shouldSkip(const PrintingPolicy& Policy,
 }
 
 bool PrettyPrinterBase::shouldSkip(const PrintingPolicy& Policy,
-                                   const gtirb::Symbol& Symbol,
-                                   bool CheckSymNameOnly) const {
+                                   const gtirb::Symbol& Symbol) const {
+  return shouldSkipSymbol(Policy, Symbol, false /*CheckSymNameOnly*/);
+}
+
+bool PrettyPrinterBase::shouldSkipSymbol(const PrintingPolicy& Policy,
+                                         const gtirb::Symbol& Symbol,
+                                         bool CheckSymNameOnly) const {
   if (Policy.LstMode == ListingDebug) {
     return false;
   }

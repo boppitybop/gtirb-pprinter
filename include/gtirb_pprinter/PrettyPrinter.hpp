@@ -512,8 +512,11 @@ protected:
 
   bool shouldSkip(const PrintingPolicy& Policy,
                   const gtirb::Section& section) const;
-  bool shouldSkip(const PrintingPolicy& Policy, const gtirb::Symbol& symbol,
-                  bool CheckSymNameOnly = false) const;
+  bool shouldSkip(const PrintingPolicy& Policy,
+                  const gtirb::Symbol& symbol) const;
+  bool shouldSkipSymbol(const PrintingPolicy& Policy,
+                        const gtirb::Symbol& symbol,
+                        bool CheckSymNameOnly) const;
   bool shouldSkip(const PrintingPolicy& Policy,
                   const gtirb::CodeBlock& block) const;
   bool shouldSkip(const PrintingPolicy& Policy,

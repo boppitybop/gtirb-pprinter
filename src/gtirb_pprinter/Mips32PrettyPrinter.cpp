@@ -209,10 +209,8 @@ void Mips32PrettyPrinter::fixupInstruction(cs_insn& inst) {
     // Here we fix Capstone's output by inserting the implicit first operand
     // $zero for DIV and DIVU.
     cs_mips& Detail = inst.detail->mips;
-    // NOTE: In the version of capstone we use (v5), div.s shares the same ID,
-    // An additional check is added here to handle this case correctly.
-    // TODO: This issue is fixed in Capstone v6.
-    // Remove this workaround once our Capstone fork is updated.
+    // In capstone v5, div.s shares the same instruction ID as div/divu.
+    // An explicit check is added to correctly distinguish these cases.
     std::string Name = ascii_str_toupper(inst.mnemonic);
     if (Detail.op_count == 2 && (Name == "DIV" || Name == "DIVU")) {
       cs_mips_op Op0;
@@ -285,45 +283,34 @@ void Mips32PrettyPrinter::printSymExprPrefix(
     } else {
       OS << "%got(";
     }
-  } else if (Attrs.count(gtirb::SymAttribute::DTPREL)) {
-    UnusedAttrs.erase(gtirb::SymAttribute::DTPREL);
-    if (Attrs.count(gtirb::SymAttribute::HI)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::HI);
-      OS << "%dtprel_hi(";
-    } else if (Attrs.count(gtirb::SymAttribute::LO)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::LO);
-      OS << "%dtprel_lo(";
-    } else {
-      assert(!"DTPREL with HI/LO");
-    }
-  } else if (Attrs.count(gtirb::SymAttribute::TPREL)) {
-    UnusedAttrs.erase(gtirb::SymAttribute::TPREL);
-    if (Attrs.count(gtirb::SymAttribute::HI)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::HI);
-      OS << "%tprel_hi(";
-    } else if (Attrs.count(gtirb::SymAttribute::LO)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::LO);
-      OS << "%tprel_lo(";
-    } else {
-      assert(!"TPREL with HI/LO");
-    }
-  } else if (Attrs.count(gtirb::SymAttribute::PCREL)) {
-    UnusedAttrs.erase(gtirb::SymAttribute::PCREL);
-    if (Attrs.count(gtirb::SymAttribute::HI)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::HI);
-      OS << "%pcrel_hi(";
-    } else if (Attrs.count(gtirb::SymAttribute::LO)) {
-      UnusedAttrs.erase(gtirb::SymAttribute::LO);
-      OS << "%pcrel_lo(";
-    } else {
-      assert(!"PCREL with HI/LO");
-    }
   } else if (Attrs.count(gtirb::SymAttribute::HI)) {
     UnusedAttrs.erase(gtirb::SymAttribute::HI);
-    OS << "%hi(";
+    if (Attrs.count(gtirb::SymAttribute::DTPREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::DTPREL);
+      OS << "%dtprel_hi(";
+    } else if (Attrs.count(gtirb::SymAttribute::TPREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::TPREL);
+      OS << "%tprel_hi(";
+    } else if (Attrs.count(gtirb::SymAttribute::PCREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::PCREL);
+      OS << "%pcrel_hi(";
+    } else {
+      OS << "%hi(";
+    }
   } else if (Attrs.count(gtirb::SymAttribute::LO)) {
     UnusedAttrs.erase(gtirb::SymAttribute::LO);
-    OS << "%lo(";
+    if (Attrs.count(gtirb::SymAttribute::DTPREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::DTPREL);
+      OS << "%dtprel_lo(";
+    } else if (Attrs.count(gtirb::SymAttribute::TPREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::TPREL);
+      OS << "%tprel_lo(";
+    } else if (Attrs.count(gtirb::SymAttribute::PCREL)) {
+      UnusedAttrs.erase(gtirb::SymAttribute::PCREL);
+      OS << "%pcrel_lo(";
+    } else {
+      OS << "%lo(";
+    }
   } else if (Attrs.count(gtirb::SymAttribute::TLSGD)) {
     UnusedAttrs.erase(gtirb::SymAttribute::TLSGD);
     OS << "%tlsgd(";
@@ -354,9 +341,6 @@ void Mips32PrettyPrinter::printSymExprSuffix(
   for (const auto& Attr : Attrs) {
     switch (Attr) {
     case gtirb::SymAttribute::GOT:
-    case gtirb::SymAttribute::DTPREL:
-    case gtirb::SymAttribute::TPREL:
-    case gtirb::SymAttribute::PCREL:
     case gtirb::SymAttribute::HI:
     case gtirb::SymAttribute::LO:
     case gtirb::SymAttribute::TLSGD:
@@ -409,7 +393,7 @@ bool Mips32PrettyPrinter::shouldSkipForwardedSymbol(
   // To address this, in addition to checking the symbol name, also verify
   // the corresponding funcion and section to determine whether it should be
   // skipped.
-  return shouldSkip(Policy, Symbol, false /*CheckSymNameOnly*/);
+  return shouldSkipSymbol(Policy, Symbol, false /*CheckSymNameOnly*/);
 }
 
 } // namespace gtirb_pprint
