@@ -393,7 +393,7 @@ bool Mips32PrettyPrinter::shouldSkipForwardedSymbol(
   // To address this, in addition to checking the symbol name, also verify
   // the corresponding funcion and section to determine whether it should be
   // skipped.
-  return shouldSkipSymbol(Policy, Symbol, false /*CheckSymNameOnly*/);
+  return shouldSkip(Policy, Symbol, false /*CheckSymNameOnly*/);
 }
 
 } // namespace gtirb_pprint
