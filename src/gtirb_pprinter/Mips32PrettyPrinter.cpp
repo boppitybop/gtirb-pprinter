@@ -386,12 +386,17 @@ void Mips32PrettyPrinter::printSymbolicExpression(
 
 bool Mips32PrettyPrinter::shouldSkipForwardedSymbol(
     const PrintingPolicy& Policy, const gtirb::Symbol& Symbol) {
-  // In stripped or sstripped MIPS binaries, function and secction names are
-  // removed, which can cause certain functions or sectdions that should be
-  // skipped according to policy--such as _init or _start--to remain, leading
-  // to dangling references.
-  // To address this, in addition to checking the symbol name, also verify
-  // the corresponding funcion and section to determine whether it should be
+  // In stripped or sstripped MIPS binaries, function symbols may be removed.
+  // This can leave references to labels in sections that are skipped by
+  // policy (such as `.dtors`), resulting in dangling references.
+  //
+  // For example, in examples/ex_dyn_library, `__do_global_dtors_auxis` resides
+  // in the `.text` section and is one of the functions to skip.
+  // In the stripped binary, both the function and its reference to the
+  // `.dtors` section remain, but `.dtors` itself is skipped by policy.
+  //
+  // To handle this, we check not only the symbol name but also the
+  // corresponding function and section to determine whether it should be
   // skipped.
   return shouldSkip(Policy, Symbol, false /*CheckSymNameOnly*/);
 }
