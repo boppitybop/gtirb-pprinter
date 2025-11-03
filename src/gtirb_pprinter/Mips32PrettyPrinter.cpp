@@ -390,8 +390,8 @@ bool Mips32PrettyPrinter::shouldSkipForwardedSymbol(
   // This can leave references to labels in sections that are skipped by
   // policy (such as `.dtors`), resulting in dangling references.
   //
-  // For example, in examples/ex_dyn_library, `__do_global_dtors_auxis` resides
-  // in the `.text` section and is one of the functions to skip.
+  // For example, in ddisasm's examples/ex_dyn_library, `__do_global_dtors_aux`
+  // resides in the `.text` section and is one of the functions to skip.
   // In the stripped binary, both the function and its reference to the
   // `.dtors` section remain, but `.dtors` itself is skipped by policy.
   //

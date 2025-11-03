@@ -604,16 +604,14 @@ bool PrettyPrinterBase::shouldSkipForwardedSymbol(
   // By default, only the forwarded symbol name is checked against
   // skip.Symbols, without further verifying the corresponding function
   // or section.
-  // This check is necessary because forwarded symbols in the PLT section
-  // should not be skipped.
-  // For example, in example/ex_exceptions1 built with clang,
+  // This check is necessary because forwarded symbols generally should not
+  // be skipped, though see Mips32PrettyPrinter for an exception. For an
+  // example of a symbol that should not be skipped despite having a real
+  // referent that is, see example/ex_exception1 in ddisasm: With clang, the
   // the PLT entry for `_ZNSt8ios_base4InitD1Ev` has a GLOBAL symbol with
-  // the same name, which prevents a ProxyBlock from being created for that
-  // symbol. Since the symbol already has a CodeBlock in the PLT, it would
+  // the same name, so ddisasm creates one symbol referring to the PLT block.
+  // Since the symbol already has a CodeBlock in the PLT, it would
   // be skipped if an additional section check were performed.
-  // NOTE: If the symbol in the PLT were renamed to
-  // `_ZNSt8ios_base4InitD1Ev_copy`, similar to how ABI-intrinsic variables
-  // are handled, this CheckSymNameOnly would no longer be necessary.
   bool CheckSymNameOnly = true;
   return shouldSkip(Policy, ForwardedSymbol, CheckSymNameOnly);
 }
