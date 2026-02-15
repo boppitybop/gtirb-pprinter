@@ -21,6 +21,7 @@
 #include "StringUtils.hpp"
 #include "regex"
 #include <boost/algorithm/string/replace.hpp>
+#include <unordered_set>
 
 namespace gtirb_pprint {
 
@@ -66,23 +67,23 @@ std::string MasmSyntax::formatFunctionName(const std::string& x) const {
   return name;
 }
 
-std::string MasmSyntax::avoidRegNameConflicts(const std::string& x) const {
-  // MASM has a long number of reserved words that ml.exe rejects
-  // as symbol names; but most relevant for actual users,
-  // "div" is an invalid symbol name for MASM but not intel.
-  const std::vector<std::string> adapt{
-      "FS", "MOD", "NOT", "Di", "DIV", "Si", "AND", "OR", "SHR",
-      "fs", "mod", "not", "di", "div", "si", "and", "or", "shr"};
+std::string MasmSyntax::sanitizeSymbolName(const std::string& x) const {
+  // MASM reserves additional keywords on top of what GAS Intel syntax
+  // needs; most notably "div" is invalid in MASM but fine in GAS.
+  static const std::unordered_set<std::string> MasmExtra{
+      "div",
+  };
 
-  if (const auto found = std::find(std::begin(adapt), std::end(adapt), x);
-      found != std::end(adapt)) {
+  std::string Lower = ascii_str_tolower(x);
+  if (MasmExtra.count(Lower)) {
     return x + "_renamed";
   }
-  return x;
+  // Fall back to the base-class register / hex-literal checks.
+  return Syntax::sanitizeSymbolName(x);
 }
 
 std::string MasmSyntax::formatSymbolName(const std::string& x) const {
-  std::string name = this->avoidRegNameConflicts(x);
+  std::string name = this->sanitizeSymbolName(x);
   if (name[0] == '.')
     name[0] = '$';
   return name;
@@ -189,8 +190,7 @@ void MasmPrettyPrinter::printExterns(std::ostream& os) {
     // indirect, or both, we will define both as extern conservatively.  This
     // should have no impact at runtime, and both with be defined in the
     // import library regardless.
-    os << masmSyntax.extrn() << " "
-       << "__imp_" << Name << ":PROC\n";
+    os << masmSyntax.extrn() << " " << "__imp_" << Name << ":PROC\n";
     os << masmSyntax.extrn() << " " << Name << ":PROC\n";
   }
 
@@ -759,7 +759,8 @@ void MasmPrettyPrinter::printOpIndirect(
   //       KUSER_SHARED_DATA = 7ffe0000H
   if (module.getISA() == gtirb::ISA::IA32 &&
       op.mem.segment == X86_REG_INVALID && op.mem.base == X86_REG_INVALID &&
-      op.mem.index == X86_REG_INVALID) {
+      (op.mem.index == X86_REG_INVALID || op.mem.index == X86_REG_RIZ ||
+       op.mem.index == X86_REG_EIZ)) {
     if (!symbolic) {
       os << "DS:";
     } else if (const auto* Expr = std::get_if<gtirb::SymAddrConst>(symbolic)) {
@@ -777,7 +778,10 @@ void MasmPrettyPrinter::printOpIndirect(
     os << getRegisterName(op.mem.base);
   }
 
-  if (op.mem.index != X86_REG_INVALID) {
+  // RIZ/EIZ are pseudo-registers representing "no index" in the SIB byte.
+  // They are not real registers and cannot be assembled, so skip them.
+  if (op.mem.index != X86_REG_INVALID && op.mem.index != X86_REG_RIZ &&
+      op.mem.index != X86_REG_EIZ) {
     if (!first)
       os << '+';
     first = false;

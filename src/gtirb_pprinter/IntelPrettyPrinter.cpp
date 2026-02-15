@@ -128,7 +128,10 @@ void IntelPrettyPrinter::printOpIndirect(
     os << getRegisterName(op.mem.base);
   }
 
-  if (op.mem.index != X86_REG_INVALID) {
+  // RIZ/EIZ are pseudo-registers representing "no index" in the SIB byte.
+  // GAS does not accept them as register names, so skip printing them.
+  if (op.mem.index != X86_REG_INVALID && op.mem.index != X86_REG_RIZ &&
+      op.mem.index != X86_REG_EIZ) {
     if (!first)
       os << '+';
     first = false;

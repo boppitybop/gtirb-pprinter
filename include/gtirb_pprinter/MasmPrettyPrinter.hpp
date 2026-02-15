@@ -57,7 +57,7 @@ public:
   // Formatting helpers
   std::string formatSectionName(const std::string& x) const override;
   std::string formatFunctionName(const std::string& x) const override;
-  std::string avoidRegNameConflicts(const std::string& x) const override;
+  std::string sanitizeSymbolName(const std::string& x) const override;
   std::string formatSymbolName(const std::string& x) const override;
 
 private:
@@ -141,7 +141,7 @@ protected:
   void printIntegralSymbol(std::ostream& os,
                            const gtirb::Symbol& symbol) override;
   void printUndefinedSymbol(std::ostream& /*os*/,
-                            const gtirb::Symbol& /*symbol*/) override{};
+                            const gtirb::Symbol& /*symbol*/) override {};
 
   void printSymbolicExpression(std::ostream& os,
                                const gtirb::SymAddrConst* sexpr,

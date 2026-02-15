@@ -23,7 +23,7 @@ class DEBLOAT_PRETTYPRINTER_EXPORT_API IntelSyntax : public ElfSyntax {
 public:
   const std::string& offset() const { return OffsetDirective; }
   std::string formatSymbolName(const std::string& Name) const override {
-    return avoidRegNameConflicts(Name);
+    return sanitizeSymbolName(Name);
   }
 
 private:
