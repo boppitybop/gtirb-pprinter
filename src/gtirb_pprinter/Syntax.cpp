@@ -14,8 +14,10 @@
 //===----------------------------------------------------------------------===//
 #include "Syntax.hpp"
 
+#include <algorithm>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/range/algorithm/find_if.hpp>
+#include <cctype>
 #include <map>
 #include <vector>
 
@@ -53,6 +55,28 @@ std::string Syntax::formatSymbolName(const std::string& Name) const {
   return Name;
 }
 
+// Returns true if Name looks like it could be a hex literal (e.g. "AB",
+// "DEADh", "Cx").  GAS in Intel syntax will try to parse these as numbers
+// rather than symbol references, which breaks operands like [RIP+Cx+1].
+static bool looksLikeHexConstant(const std::string& Name) {
+  if (Name.empty())
+    return false;
+  size_t Len = Name.size();
+  size_t End = Len;
+
+  // Strip optional trailing 'h' or 'H'
+  if (Len > 1 && (Name[Len - 1] == 'h' || Name[Len - 1] == 'H'))
+    End = Len - 1;
+
+  // All remaining characters must be hex digits
+  for (size_t I = 0; I < End; ++I) {
+    if (!std::isxdigit(static_cast<unsigned char>(Name[I])))
+      return false;
+  }
+
+  return true;
+}
+
 std::string Syntax::avoidRegNameConflicts(const std::string& Name) const {
 
   const std::vector<std::string> Adapt{
@@ -63,6 +87,12 @@ std::string Syntax::avoidRegNameConflicts(const std::string& Name) const {
       found != std::end(Adapt)) {
     return Name + "_renamed";
   }
+
+  // Names like "Bh" or "FF" get parsed as hex literals by GAS in Intel mode.
+  if (looksLikeHexConstant(Name)) {
+    return Name + "_renamed";
+  }
+
   return Name;
 }
 

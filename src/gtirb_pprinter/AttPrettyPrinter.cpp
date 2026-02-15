@@ -148,7 +148,10 @@ void AttPrettyPrinter::printOpIndirect(
 
   bool has_segment = op.mem.segment != X86_REG_INVALID;
   bool has_base = op.mem.base != X86_REG_INVALID;
-  bool has_index = op.mem.index != X86_REG_INVALID;
+  // RIZ/EIZ are pseudo-registers representing "no index" in the SIB byte.
+  // GAS does not accept them as register names, so treat them as absent.
+  bool has_index = op.mem.index != X86_REG_INVALID &&
+                   op.mem.index != X86_REG_RIZ && op.mem.index != X86_REG_EIZ;
 
   if (cs_insn_group(this->csHandle, &inst, CS_GRP_CALL) ||
       cs_insn_group(this->csHandle, &inst, CS_GRP_JUMP))
